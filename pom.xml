@@ -4,14 +4,60 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.csi</groupId>
-    <artifactId>antikythera-agent</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <!-- Define your agent's coordinates -->
+    <groupId>sa.com.cloudsolutions.antikythera</groupId>
+    <artifactId>field-access-agent</artifactId>
+    <version>1.0.0</version>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <byte-buddy.version>1.14.17</byte-buddy.version>
     </properties>
-    
+
+    <dependencies>
+        <!-- Core Byte Buddy library for code generation and instrumentation -->
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>${byte-buddy.version}</version>
+        </dependency>
+        <!-- Provides the AgentBuilder and other agent-specific tools -->
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <version>${byte-buddy.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- This plugin compiles your Java code -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+            <!-- This plugin builds the JAR and configures its manifest -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <!-- This entry is CRITICAL. It tells the JVM which class to load as the agent. -->
+                            <Premain-Class>sa.com.cloudsolutions.antikythera.agent.FieldAccessAgent</Premain-Class>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
