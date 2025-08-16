@@ -8,6 +8,8 @@ import net.bytebuddy.utility.JavaModule;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method; // Import the Method class
+import java.security.ProtectionDomain;
 
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
@@ -75,10 +77,23 @@ public class FieldAccessAgent {
     public static class DirectFieldAccessAdvice {
         @Advice.OnMethodExit
         public static void logDirectAccess(
+                // The instance on which the field is being set
                 @Advice.This Object instance,
+                // The value being assigned to the field
                 @Advice.Argument(0) Object value,
-                @Advice.Origin("#f") String fieldName
+                // **FIX**: Get the Method object instead of using the brittle "#f" origin.
+                @Advice.Origin Method method
         ) {
+            String methodName = method.getName();
+            String fieldName = "unknown";
+
+            // **FIX**: Derive the field name from the setter method name.
+            // This is robust and won't crash if the method is not a simple field setter.
+            if (methodName.startsWith("set") && methodName.length() > 3) {
+                // e.g., "setName" -> "name"
+                fieldName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+            }
+
             System.out.printf("[AGENT LOG - DIRECT] Field '%s' on object [%s] was assigned the value: '%s'%n",
                     fieldName,
                     instance.getClass().getName(),
@@ -92,11 +107,6 @@ public class FieldAccessAgent {
      * This advice is applied to the `java.lang.reflect.Field.set` method.
      */
     public static class ReflectiveFieldAccessAdvice {
-
-        /**
-         * This advice is now skipped if the condition in ExcludedPackageCondition returns true.
-         * This is much more performant than an if-statement inside the method body.
-         */
         @Advice.OnMethodEnter(skipOn = ExcludedPackageCondition.class)
         public static void logReflectiveAccess(
                 @Advice.This Field field,
@@ -116,10 +126,6 @@ public class FieldAccessAgent {
      * returns true, the advice body is skipped entirely.
      */
     public static class ExcludedPackageCondition {
-        /**
-         * @param instance The instance being modified (passed from the advice's arguments).
-         * @return true if the instance belongs to an excluded package, causing the advice to be skipped.
-         */
         public static boolean onEnter(@Advice.Argument(0) Object instance) {
             String className = instance.getClass().getName();
             return className.startsWith("sa.com.cloudsolutions.antikythera.evaluator") ||
