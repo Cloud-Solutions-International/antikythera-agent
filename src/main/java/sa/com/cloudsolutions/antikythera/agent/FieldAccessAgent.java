@@ -43,6 +43,9 @@ public class FieldAccessAgent {
                                 // AND the class must NOT be in any of the specified packages.
                                 .and(not(
                                         nameStartsWith("sa.com.cloudsolutions.antikythera.evaluator")
+                                                .or(nameStartsWith("java"))
+                                                .or(nameStartsWith("org.junit"))
+                                                .or(nameStartsWith("com.github.javaparser"))
                                                 .or(nameStartsWith("sa.com.cloudsolutions.antikythera.depsolver"))
                                                 .or(nameStartsWith("sa.com.cloudsolutions.antikythera.generator"))
                                                 .or(nameStartsWith("sa.com.cloudsolutions.antikythera.parser"))
@@ -107,7 +110,7 @@ public class FieldAccessAgent {
      * This advice is applied to the `java.lang.reflect.Field.set` method.
      */
     public static class ReflectiveFieldAccessAdvice {
-        @Advice.OnMethodEnter(skipOn = ExcludedPackageCondition.class)
+        @Advice.OnMethodEnter()
         public static void logReflectiveAccess(
                 @Advice.This Field field,
                 @Advice.Argument(0) Object instance,
