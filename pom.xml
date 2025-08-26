@@ -53,6 +53,9 @@
                         <manifestEntries>
                             <!-- This entry is CRITICAL. It tells the JVM which class to load as the agent. -->
                             <Premain-Class>sa.com.cloudsolutions.antikythera.agent.FieldAccessAgent</Premain-Class>
+                            <!-- Add these entries to enable class redefinition and retransformation -->
+                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
                         </manifestEntries>
                     </archive>
                 </configuration>
