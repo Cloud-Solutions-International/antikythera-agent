@@ -27,8 +27,6 @@ public class FieldAccessAgent {
      * @param instrumentation The instrumentation interface provided by the JVM.
      */
     public static void premain(String agentArgs, Instrumentation instrumentation) {
-        System.out.println("[FieldAccessAgent] Initializing agent...");
-
         new AgentBuilder.Default()
                 // Rule 1: Instrument java.lang.reflect.Field to catch reflective access.
                 .type(named("java.lang.reflect.Field"))
@@ -59,18 +57,11 @@ public class FieldAccessAgent {
                 // Add a listener to see which classes are being transformed (optional, but useful for debugging)
                 .with(new AgentBuilder.Listener.Adapter() {
                     @Override
-                    public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, boolean loaded, DynamicType dynamicType) {
-                        System.out.println("[FieldAccessAgent] Transformed: " + typeDescription.getName());
-                    }
-
-                    @Override
                     public void onError(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded, Throwable throwable) {
                         System.err.println("[FieldAccessAgent] Error transforming " + typeName + ": " + throwable.getMessage());
                     }
                 })
                 .installOn(instrumentation);
-
-        System.out.println("[FieldAccessAgent] Agent installed successfully.");
     }
 
     /**
