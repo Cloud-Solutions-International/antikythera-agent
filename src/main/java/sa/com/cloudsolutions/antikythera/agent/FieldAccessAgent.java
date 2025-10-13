@@ -25,6 +25,9 @@ public class FieldAccessAgent {
      */
     public static void premain(String agentArgs, Instrumentation instrumentation) {
         new AgentBuilder.Default()
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .disableClassFormatChanges()
+                .with(AgentBuilder.LambdaInstrumentationStrategy.DISABLED)
                 // Rule 1: Instrument java.lang.reflect.Field to catch reflective access.
                 .type(named("java.lang.reflect.Field"))
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
@@ -40,6 +43,7 @@ public class FieldAccessAgent {
                                         nameStartsWith("sa.com.cloudsolutions.antikythera.evaluator")
                                                 .or(nameStartsWith("java"))
                                                 .or(nameStartsWith("org.junit"))
+                                                .or(nameStartsWith("com.intellij"))
                                                 .or(nameStartsWith("com.github.javaparser"))
                                                 .or(nameStartsWith("sa.com.cloudsolutions.antikythera.depsolver"))
                                                 .or(nameStartsWith("sa.com.cloudsolutions.antikythera.generator"))
@@ -48,11 +52,17 @@ public class FieldAccessAgent {
                                 ))
                 )
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
-                        builder.visit(Advice.to(DirectFieldAccessAdvice.class)
-                                .on(isSetter().and(not(isSynthetic()))))
+                        builder.method(isSetter())
+                                .intercept(Advice.to(DirectFieldAccessAdvice.class))
                 )
                 // Add a listener to see which classes are being transformed (optional, but useful for debugging)
                 .with(new AgentBuilder.Listener.Adapter() {
+                    @Override
+                    public void onComplete(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded) {
+                        super.onComplete(typeName, classLoader, module, loaded);
+                        System.out.println("BADASS: Transformed " + typeName);
+                    }
+
                     @Override
                     public void onError(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded, Throwable throwable) {
                         System.err.println("[FieldAccessAgent] Error transforming " + typeName + ": " + throwable.getMessage());
@@ -82,14 +92,14 @@ public class FieldAccessAgent {
             // This is robust and won't crash if the method is not a simple field setter.
             if (methodName.startsWith("set") && methodName.length() > 3) {
                 // e.g., "setName" -> "name"
-                fieldName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                fieldName = methodName.substring(3, 4).toLowerCase(java.util.Locale.ROOT) + methodName.substring(4);
             }
 
-            System.out.printf("[AGENT LOG - DIRECT] Field '%s' on object [%s] was assigned the value: '%s'%n",
-                    fieldName,
-                    instance.getClass().getName(),
-                    value
-            );
+//            System.out.printf("[AGENT LOG - DIRECT] Field '%s' on object [%s] was assigned the value: '%s'%n",
+//                    fieldName,
+//                    instance.getClass().getName(),
+//                    value
+//            );
         }
     }
 
@@ -104,11 +114,11 @@ public class FieldAccessAgent {
                 @Advice.Argument(0) Object instance,
                 @Advice.Argument(1) Object value
         ) {
-            System.out.printf("[AGENT LOG - REFLECTION] Field '%s' on object [%s] was assigned the value: '%s'%n",
-                    field.getName(),
-                    instance.getClass().getName(),
-                    value
-            );
+//            System.out.printf("[AGENT LOG - REFLECTION] Field '%s' on object [%s] was assigned the value: '%s'%n",
+//                    field.getName(),
+//                    instance.getClass().getName(),
+//                    value
+//            );
         }
     }
 
