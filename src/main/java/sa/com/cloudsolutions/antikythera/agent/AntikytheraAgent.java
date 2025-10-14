@@ -18,8 +18,6 @@ import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Opcodes;
 
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 /**
  * Java agent that installs a Byte Buddy transformation to classes that declare a field named
@@ -55,20 +53,32 @@ public class AntikytheraAgent {
                 ElementMatchers.declaresField(ElementMatchers.named("instanceInterceptor"));
 
         new AgentBuilder.Default()
-                .ignore(ElementMatchers.none()) // we restrict by the transformation matcher instead
-                // Instrument application classes that have an instanceInterceptor field
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .with(AgentBuilder.InitializationStrategy.NoOp.INSTANCE)
+                .with(AgentBuilder.TypeStrategy.Default.REDEFINE)
+                .ignore(ElementMatchers.none())
                 .type(typeMatcher)
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                         builder.visit(createFieldWriteHook()))
-                // Also instrument reflective sets performed through java.lang.reflect.Field
                 .type(ElementMatchers.named("java.lang.reflect.Field"))
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                         builder.visit(Advice.to(ReflectiveSetAdvice.class).on(
-                                ElementMatchers.nameStartsWith("set")
-                                        .and(ElementMatchers.takesArguments(2))
-                                        .and(ElementMatchers.takesArgument(0, Object.class))
+                                ElementMatchers.named("set")
+                                        .or(ElementMatchers.named("setBoolean"))
+                                        .or(ElementMatchers.named("setByte"))
+                                        .or(ElementMatchers.named("setChar"))
+                                        .or(ElementMatchers.named("setShort"))
+                                        .or(ElementMatchers.named("setInt"))
+                                        .or(ElementMatchers.named("setLong"))
+                                        .or(ElementMatchers.named("setFloat"))
+                                        .or(ElementMatchers.named("setDouble"))
                         )))
                 .installOn(inst);
+        try {
+            inst.retransformClasses(java.lang.reflect.Field.class);
+        } catch (Exception e) {
+            System.out.println("Failed to retransform Field: " + e.getMessage());
+        }
     }
 
     private static AsmVisitorWrapper createFieldWriteHook() {
@@ -109,64 +119,5 @@ public class AntikytheraAgent {
                 };
             }
         };
-    }
-
-    /**
-     * Advice that runs after reflective field set operations. It uses only JDK reflection
-     * to avoid class loader issues when instrumenting a bootstrap class.
-     */
-    public static class ReflectiveSetAdvice {
-        @Advice.OnMethodExit(onThrowable = Throwable.class)
-        public static void after(
-                @Advice.This Field self,
-                @Advice.Argument(0) Object target,
-                @Advice.Argument(value = 1, typing = Assigner.Typing.DYNAMIC) Object value,
-                @Advice.Thrown Throwable thrown
-        ) {
-            System.out.println("AFTER");
-
-            if (thrown != null) return; // only after successful sets
-            if (target == null) return; // static fields not supported (no instanceInterceptor)
-            try {
-                // Find 'instanceInterceptor' field up the hierarchy
-                Class<?> t = target.getClass();
-                java.lang.reflect.Field interceptorField = null;
-                while (t != null && t != Object.class) {
-                    try {
-                        interceptorField = t.getDeclaredField("instanceInterceptor");
-                        break;
-                    } catch (NoSuchFieldException e) {
-                        t = t.getSuperclass();
-                    }
-                }
-                if (interceptorField == null) return;
-                interceptorField.setAccessible(true);
-                Object interceptor = interceptorField.get(target);
-                if (interceptor == null) return;
-
-                // Resolve setField(String, Symbol/any reference) method
-                Method setField;
-                try {
-                    Class<?> symbolClass = Class.forName("sa.com.cloudsolutions.antikythera.evaluator.Symbol");
-                    setField = interceptor.getClass().getMethod("setField", String.class, symbolClass);
-                } catch (Throwable ignore) {
-                    setField = null;
-                    for (Method m : interceptor.getClass().getMethods()) {
-                        if (!m.getName().equals("setField")) continue;
-                        Class<?>[] p = m.getParameterTypes();
-                        if (p.length == 2 && p[0] == String.class && !p[1].isPrimitive()) {
-                            setField = m;
-                            break;
-                        }
-                    }
-                }
-                if (setField == null) return;
-                setField.setAccessible(true);
-                // We pass null for Symbol value to avoid dependency, consistent with direct write hook
-                setField.invoke(interceptor, self.getName(), null);
-            } catch (Throwable ignore) {
-                // never let reflective hook break application behavior
-            }
-        }
     }
 }
