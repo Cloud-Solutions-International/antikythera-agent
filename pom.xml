@@ -27,6 +27,17 @@
             <artifactId>asm-commons</artifactId>
             <version>${asm.version}</version>
         </dependency>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>1.15.11</version>
+        </dependency>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <version>1.15.11</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -47,6 +58,7 @@
                     <archive>
                         <manifestEntries>
                             <Premain-Class>sa.com.cloudsolutions.antikythera.agent.AntikytheraAgent</Premain-Class>
+                            <Agent-Class>sa.com.cloudsolutions.antikythera.agent.AntikytheraAgent</Agent-Class>
                             <Can-Redefine-Classes>true</Can-Redefine-Classes>
                             <Can-Retransform-Classes>true</Can-Retransform-Classes>
                         </manifestEntries>
@@ -69,6 +81,7 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
                                         <Premain-Class>sa.com.cloudsolutions.antikythera.agent.AntikytheraAgent</Premain-Class>
+                                        <Agent-Class>sa.com.cloudsolutions.antikythera.agent.AntikytheraAgent</Agent-Class>
                                         <Can-Redefine-Classes>true</Can-Redefine-Classes>
                                         <Can-Retransform-Classes>true</Can-Retransform-Classes>
                                     </manifestEntries>
