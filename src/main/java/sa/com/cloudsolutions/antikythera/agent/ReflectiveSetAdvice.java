@@ -11,6 +11,14 @@ import java.lang.reflect.Method;
  * to avoid class loader issues when instrumenting a bootstrap class.
  */
 public class ReflectiveSetAdvice {
+
+    /**
+     * ThreadLocal flag to track if we're currently inside an agent-originated call.
+     * This prevents infinite recursion when our callbacks trigger more reflective operations.
+     * Must be public to be accessible from java.lang.reflect.Field (bootstrap module).
+     */
+    public static final ThreadLocal<Boolean> IN_AGENT_CALL = ThreadLocal.withInitial(() -> false);
+
     @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void after(
             @Advice.This Field self,
@@ -18,10 +26,15 @@ public class ReflectiveSetAdvice {
             @Advice.Argument(value = 1, typing = Assigner.Typing.DYNAMIC) Object value,
             @Advice.Thrown Throwable thrown
     ) {
+        // Prevent recursive interception from agent-originated calls
+        if (IN_AGENT_CALL.get()) return;
+
         if (thrown != null) return; // only after successful sets
         if (target == null) return; // static fields not supported (no instanceInterceptor)
         if (self == null || self.getName().equals("instanceInterceptor") ) return;
 
+        // Mark that we're entering an agent call to prevent recursion
+        IN_AGENT_CALL.set(true);
         try {
             // Find 'instanceInterceptor' field up the hierarchy
             Class<?> t = target.getClass();
@@ -79,6 +92,9 @@ public class ReflectiveSetAdvice {
             }
         } catch (Throwable ignore) {
             // never let reflective hook break application behavior
+        } finally {
+            // Always clear the flag when exiting
+            IN_AGENT_CALL.set(false);
         }
     }
 }

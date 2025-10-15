@@ -2,30 +2,16 @@ package sa.com.cloudsolutions.antikythera.agent;
 
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
-import net.bytebuddy.asm.AsmVisitorWrapper;
 import net.bytebuddy.asm.Advice;
-import net.bytebuddy.description.field.FieldDescription;
-import net.bytebuddy.description.field.FieldList;
-import net.bytebuddy.description.method.MethodList;
-import net.bytebuddy.description.type.TypeDescription;
-import net.bytebuddy.implementation.Implementation;
-import net.bytebuddy.implementation.bytecode.assign.Assigner;
-import net.bytebuddy.matcher.ElementMatcher;
+import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.matcher.ElementMatchers;
-import net.bytebuddy.pool.TypePool;
-import net.bytebuddy.jar.asm.ClassVisitor;
-import net.bytebuddy.jar.asm.MethodVisitor;
-import net.bytebuddy.jar.asm.Opcodes;
 
 import java.lang.instrument.Instrumentation;
 
 /**
- * Java agent that installs a Byte Buddy transformation to classes that declare a field named
- * "instanceInterceptor". For such classes, after any successful field write (PUTFIELD/PUTSTATIC)
- * inside an instance method, we invoke Support.afterSet(this, fieldName, null).
- *
- * Additionally, we intercept reflective writes via java.lang.reflect.Field#set*(Object, ...)
- * and perform the same callback after successful completion.
+ * Java agent that intercepts reflective field writes via java.lang.reflect.Field#set*(Object, ...)
+ * and updates the corresponding Symbol in the EvaluationEngine if the target object has an
+ * instanceInterceptor field.
  *
  * The agent can be installed via premain/agentmain or programmatically by calling initialize().
  */
@@ -49,17 +35,37 @@ public class AntikytheraAgent {
     }
 
     private static void install(Instrumentation inst) {
-        ElementMatcher.Junction<TypeDescription> typeMatcher =
-                ElementMatchers.declaresField(ElementMatchers.named("instanceInterceptor"));
+        try {
+            // Manually append ReflectiveSetAdvice to bootstrap classloader
+            ClassFileLocator locator = ClassFileLocator.ForClassLoader.of(AntikytheraAgent.class.getClassLoader());
+            byte[] adviceClass = locator.locate(ReflectiveSetAdvice.class.getName()).resolve();
+
+            // Create a temporary JAR file containing the advice class
+            java.io.File tempJar = java.io.File.createTempFile("antikythera-agent-advice", ".jar");
+            tempJar.deleteOnExit();
+
+            try (java.util.jar.JarOutputStream jos = new java.util.jar.JarOutputStream(
+                    new java.io.FileOutputStream(tempJar))) {
+                java.util.jar.JarEntry entry = new java.util.jar.JarEntry(
+                        ReflectiveSetAdvice.class.getName().replace('.', '/') + ".class");
+                jos.putNextEntry(entry);
+                jos.write(adviceClass);
+                jos.closeEntry();
+            }
+
+            // Add to bootstrap classloader
+            inst.appendToBootstrapClassLoaderSearch(new java.util.jar.JarFile(tempJar));
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to inject ReflectiveSetAdvice into bootstrap classloader", e);
+        }
 
         new AgentBuilder.Default()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
                 .with(AgentBuilder.InitializationStrategy.NoOp.INSTANCE)
                 .with(AgentBuilder.TypeStrategy.Default.REDEFINE)
                 .ignore(ElementMatchers.none())
-                .type(typeMatcher)
-                .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
-                        builder.visit(createFieldWriteHook()))
+                // Only instrument java.lang.reflect.Field for reflective field sets
                 .type(ElementMatchers.named("java.lang.reflect.Field"))
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                         builder.visit(Advice.to(ReflectiveSetAdvice.class).on(
@@ -79,45 +85,5 @@ public class AntikytheraAgent {
         } catch (Exception e) {
             System.out.println("Failed to retransform Field: " + e.getMessage());
         }
-    }
-
-    private static AsmVisitorWrapper createFieldWriteHook() {
-        return new net.bytebuddy.asm.AsmVisitorWrapper.AbstractBase() {
-            @Override
-            public ClassVisitor wrap(TypeDescription instrumentedType,
-                                     ClassVisitor classVisitor,
-                                     Implementation.Context implementationContext,
-                                     TypePool typePool,
-                                     FieldList<FieldDescription.InDefinedShape> fields,
-                                     MethodList<?> methods,
-                                     int writerFlags,
-                                     int readerFlags) {
-                return new ClassVisitor(Opcodes.ASM9, classVisitor) {
-                    @Override
-                    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                        MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-                        final boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
-                        return new MethodVisitor(Opcodes.ASM9, mv) {
-                            @Override
-                            public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDesc) {
-                                super.visitFieldInsn(opcode, owner, fieldName, fieldDesc);
-                                if (!isStatic && (opcode == Opcodes.PUTFIELD || opcode == Opcodes.PUTSTATIC)) {
-                                    super.visitVarInsn(Opcodes.ALOAD, 0);
-                                    super.visitLdcInsn(fieldName);
-                                    super.visitInsn(Opcodes.ACONST_NULL);
-                                    super.visitMethodInsn(
-                                            Opcodes.INVOKESTATIC,
-                                            "sa/com/cloudsolutions/antikythera/agent/Support",
-                                            "afterSet",
-                                            "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;)V",
-                                            false
-                                    );
-                                }
-                            }
-                        };
-                    }
-                };
-            }
-        };
     }
 }
