@@ -20,10 +20,12 @@ public class ReflectiveSetAdvice {
     ) {
         if (thrown != null) return; // only after successful sets
         if (target == null) return; // static fields not supported (no instanceInterceptor)
+        if (self == null || self.getName().equals("instanceInterceptor") ) return;
+
         try {
             // Find 'instanceInterceptor' field up the hierarchy
             Class<?> t = target.getClass();
-            java.lang.reflect.Field interceptorField = null;
+            Field interceptorField = null;
             while (t != null && t != Object.class) {
                 try {
                     interceptorField = t.getDeclaredField("instanceInterceptor");
@@ -32,31 +34,49 @@ public class ReflectiveSetAdvice {
                     t = t.getSuperclass();
                 }
             }
-            if (interceptorField == null) return;
-            interceptorField.setAccessible(true);
-            Object interceptor = interceptorField.get(target);
-            if (interceptor == null) return;
-
-            // Resolve setField(String, Symbol/any reference) method
-            Method setField;
-            try {
-                Class<?> symbolClass = Class.forName("sa.com.cloudsolutions.antikythera.evaluator.Symbol");
-                setField = interceptor.getClass().getMethod("setField", String.class, symbolClass);
-            } catch (Throwable ignore) {
-                setField = null;
-                for (Method m : interceptor.getClass().getMethods()) {
-                    if (!m.getName().equals("setField")) continue;
-                    Class<?>[] p = m.getParameterTypes();
-                    if (p.length == 2 && p[0] == String.class && !p[1].isPrimitive()) {
-                        setField = m;
-                        break;
+            if (interceptorField != null) {
+                interceptorField.setAccessible(true);
+                Object methodInterceptor = interceptorField.get(target);
+                if (methodInterceptor != null) {
+                    // Get 'evaluator' field from MethodInterceptor
+                    Field evaluatorField = null;
+                    Class<?> miClass = methodInterceptor.getClass();
+                    while (miClass != null && miClass != Object.class) {
+                        try {
+                            evaluatorField = miClass.getDeclaredField("evaluator");
+                            break;
+                        } catch (NoSuchFieldException e) {
+                            miClass = miClass.getSuperclass();
+                        }
+                    }
+                    if (evaluatorField != null) {
+                        evaluatorField.setAccessible(true);
+                        Object evaluator = evaluatorField.get(methodInterceptor);
+                        if (evaluator != null) {
+                            // Use reflection to call getField(String) on the evaluator (EvaluationEngine)
+                            Method getFieldMethod = null;
+                            try {
+                                getFieldMethod = evaluator.getClass().getMethod("getField", String.class);
+                            } catch (NoSuchMethodException e) {
+                                getFieldMethod = evaluator.getClass().getDeclaredMethod("getField", String.class);
+                                getFieldMethod.setAccessible(true);
+                            }
+                            Object symbol = getFieldMethod.invoke(evaluator, self.getName());
+                            if (symbol != null) {
+                                // Use reflection to call setValue(Object) on the Symbol
+                                Method setValueMethod = null;
+                                try {
+                                    setValueMethod = symbol.getClass().getMethod("setValue", Object.class);
+                                } catch (NoSuchMethodException e) {
+                                    setValueMethod = symbol.getClass().getDeclaredMethod("setValue", Object.class);
+                                    setValueMethod.setAccessible(true);
+                                }
+                                setValueMethod.invoke(symbol, value);
+                            }
+                        }
                     }
                 }
             }
-            if (setField == null) return;
-            setField.setAccessible(true);
-            // We pass null for Symbol value to avoid dependency, consistent with direct write hook
-            setField.invoke(interceptor, self.getName(), null);
         } catch (Throwable ignore) {
             // never let reflective hook break application behavior
         }
