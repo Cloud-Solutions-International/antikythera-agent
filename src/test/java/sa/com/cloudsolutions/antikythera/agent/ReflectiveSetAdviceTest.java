@@ -9,6 +9,8 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+
+import java.util.List;
 import java.util.Map;
 
 // Minimal mock Symbol implementation
@@ -18,6 +20,22 @@ class MockSymbol implements sa.com.cloudsolutions.antikythera.evaluator.Symbol {
     @Override public void setValue(Object value) { this.value = value; }
     @Override public Object getValue() { return value; }
     @Override public void setName(String name) { this.name = name; }
+
+    @Override
+    public List<Expression> getInitializer() {
+        return List.of();
+    }
+
+    @Override
+    public void setInitializer(List<Expression> list) {
+
+    }
+
+    @Override
+    public Class<?> getClazz() {
+        return null;
+    }
+
     @Override public String getName() { return name; }
     @Override public Type getType() { return null; }
     @Override public void setType(Type type) {}
