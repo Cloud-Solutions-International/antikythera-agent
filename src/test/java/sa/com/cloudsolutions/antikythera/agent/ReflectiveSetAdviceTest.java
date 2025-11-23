@@ -1,14 +1,17 @@
 package sa.com.cloudsolutions.antikythera.agent;
 
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import static org.junit.jupiter.api.Assertions.*;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.CallableDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+
+import sa.com.cloudsolutions.antikythera.evaluator.Symbol;
+
 
 import java.util.List;
 import java.util.Map;
@@ -52,10 +55,26 @@ class MockEvaluationEngine implements sa.com.cloudsolutions.antikythera.evaluato
     @Override public Map<Integer, Map<String, sa.com.cloudsolutions.antikythera.evaluator.Symbol>> getLocals() { return null; }
     @Override public void visit(MethodDeclaration md) {}
     @Override public String getClassName() { return null; }
-    @Override public sa.com.cloudsolutions.antikythera.evaluator.Symbol executeMethod(CallableDeclaration<?> cd) { return null; }
-    @Override public sa.com.cloudsolutions.antikythera.evaluator.Symbol executeMethod(MethodDeclaration md) { return null; }
-    @Override public void executeConstructor(CallableDeclaration<?> md) {}
-    @Override public void executeConstructor(ConstructorDeclaration cd) {}
+
+    @Override
+    public Symbol executeMethod(CallableDeclaration<?> callableDeclaration) throws ReflectiveOperationException {
+        return null;
+    }
+
+    @Override
+    public Symbol executeMethod(MethodDeclaration methodDeclaration) throws ReflectiveOperationException {
+        return null;
+    }
+
+    @Override
+    public void executeConstructor(CallableDeclaration<?> callableDeclaration) throws ReflectiveOperationException {
+
+    }
+
+    @Override
+    public void executeConstructor(ConstructorDeclaration constructorDeclaration) throws ReflectiveOperationException {
+
+    }
 }
 
 // Dummy MethodInterceptor with evaluator field
