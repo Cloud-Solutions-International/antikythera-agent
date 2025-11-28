@@ -6,7 +6,7 @@
 
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera-agent</artifactId>
-    <version>0.0.2</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <properties>
